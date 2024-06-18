@@ -1,10 +1,11 @@
 #include <algorithm>
 #include <bits/stdc++.h>
 #include <raylib.h>
+#include <string>
 using namespace std;
 #define HEIGHT 800
 #define WIDTH 800
-#define TILE_SIZE 200
+#define TILE_SIZE 40
 #define FRAMES_PER_SECOND 60
 #define GAP 5
 #define CELL_COUNT WIDTH / TILE_SIZE
@@ -13,11 +14,11 @@ vector<Texture2D> textures;
 unordered_map<int, vector<vector<int>>> Sockets;
 unordered_map<int, int> SocketTypes;
 // Allocate the textures and their rotations, calculate their Sockets
-void Rotations(vector<int> rotated) {
-  for (int i : rotated) {
+void Rotations(vector<pair<int,int>> rotated) {
+  for (auto i : rotated) {
     // Rotate this texture and add it to the textures
-    Image original = LoadImageFromTexture(textures[i]);
-    for (int j = 0; j < 3; j++) {
+    Image original = LoadImageFromTexture(textures[i.first]);
+    for (int j = 0; j < i.second; j++) {
       ImageRotateCW(&original);
       textures.push_back(LoadTextureFromImage(original));
     }
@@ -76,13 +77,13 @@ void CalculateSockets() {
     // }
     UnloadImage(img);
     Sockets[i] = {up, right, down, left};
-    for (int i = 0; i < right.size(); i++){
-      if (up[i] != right[i]){
-        cout << "Loc " << i << endl;
-        cout << "UP: " << up[i] << " RIGHT: " << right[i] << endl;
+    for (int i = 0; i < right.size(); i++) {
+      if (up[i] != right[i]) {
+        // cout << "Loc " << i << endl;
+        // cout << "UP: " << up[i] << " RIGHT: " << right[i] << endl;
       }
     }
-    // continue;
+    continue;
     // reverse(right.begin(), right.end());
     // reverse(down.begin(), down.end());
     // reverse(left.begin(), left.end());
@@ -120,13 +121,17 @@ void CalculateSockets() {
 
 void Setup() {
   // Load each texture
-  textures.push_back(LoadTexture("./assets/tiles/roads/blank.png"));
-  textures.push_back(LoadTexture("./assets/tiles/roads/up.png"));
+  // textures.push_back(LoadTexture("./assets/tiles/roads/blank.png"));
+  // textures.push_back(LoadTexture("./assets/tiles/roads/up.png"));
+  for (int i = 0; i <= 12; i++){
+    string location = "./assets/tiles/circuit/" + to_string(i) + ".png";
+    textures.push_back(LoadTexture(location.c_str()));
+  }
   // textures.push_back(LoadTexture("./assets/tiles/roads/right.png"));
   // textures.push_back(LoadTexture("./assets/tiles/roads/down.png"));
   // textures.push_back(LoadTexture("./assets/tiles/roads/left.png"));
   // Add the rotated textures
-  vector<int> rotated = {1};
+  vector<pair<int,int>> rotated = {{2, 3}, {3, 1}, {4, 3}, {5, 3}, {6, 1}, {7, 3}, {8, 3}, {9, 3}, {10, 1}, {11, 3}, {12, 1}};
   // Take their sides and calculate sockets for each UP RIGHT DOWN LEFT
   Rotations(rotated);
   CalculateSockets();
@@ -146,19 +151,31 @@ public:
     collapsed = -1;
     location = {-1, -1};
   }
+  void ResetBoard();
+  void Reset() {
+    options.clear();
+    for (int i = 0; i < textures.size(); i++)
+      options.push_back(i);
+    // cout << options.size() << endl;
+    collapsed = -1;
+  }
   void Propogate();
   void RandomCollapse() {
+    // cout << "COLLAPSE" << endl;
+    if (options.size() == 0) ResetBoard();
+      // return;
     int index = GetRandomValue(0, options.size() - 1);
-    collapsed = index;
+    collapsed = options[index];
     options = {options[index]};
     Propogate();
   }
   void LimitOptions(vector<int> SpecifiedOptions, int dir) {
     int compareDir = (dir + 2) % 4;
-    cout << compareDir << " " << dir << endl;
+    // cout << compareDir << " " << dir << endl;
     vector<int> newOptions;
     for (int SpecifiedOption : SpecifiedOptions) {
       vector<int> hash = Sockets[SpecifiedOption][dir];
+      // cout << hash.size() << endl;
       reverse(hash.begin(), hash.end());
       for (int opt : options) {
         if (Sockets[opt][compareDir] == hash)
@@ -172,9 +189,14 @@ public:
   void set_collapsed(int c) { collapsed = c; }
   pair<int, int> get_location() { return location; }
   void set_location(pair<int, int> l) { location = l; }
-  Texture2D *get_tex() {
-    int index = options[get_collapsed()];
-    return &textures[index];
+  Texture2D get_tex() {
+    // cout << "Index: " << get_collapsed() << endl;
+    if (get_collapsed() < 0)
+      cerr << "ERROR: No texture to get" << endl;
+    // cout << options.size() << endl;
+    int index = get_collapsed();
+    // cout << index << endl;
+    return textures[index];
   }
 };
 
@@ -205,15 +227,24 @@ public:
       }
     }
   }
+  static void Reset() {
+    for (int i = 0; i < CELL_COUNT; i++) {
+      for (int j = 0; j < CELL_COUNT; j++) {
+        Grid[i][j]->Reset();
+      }
+    }
+  }
   static void Draw() {
     for (int i = 0; i < CELL_COUNT; i++) {
       for (int j = 0; j < CELL_COUNT; j++) {
         if (Grid[i][j]->get_collapsed() != -1) {
-          Texture2D t = *Grid[i][j]->get_tex();
+          Texture2D t = Grid[i][j]->get_tex();
           Rectangle dest = {(float)j * TILE_SIZE, (float)i * TILE_SIZE,
                             TILE_SIZE, TILE_SIZE};
           Rectangle src = {0, 0, (float)t.width, (float)t.height};
           DrawTexturePro(t, src, dest, {0, 0}, 0, WHITE);
+          // DrawText("H", (float)j * TILE_SIZE, (float)i * TILE_SIZE, 20,
+          // WHITE);
         } else {
           DrawRectangle(j * TILE_SIZE + GAP, i * TILE_SIZE + GAP,
                         TILE_SIZE - GAP, TILE_SIZE - GAP, GRAY);
@@ -221,18 +252,18 @@ public:
           vector<int> options = Grid[i][j]->getOptions();
           int options_size = options.size();
           // Draw this number at the center of the tile
-          for (int k = 0; k < options_size; k++) {
-            DrawTexturePro(textures[options[k]],
-                           {0, 0, (float)textures[options[k]].width,
-                            (float)textures[options[k]].height},
-                           {(float)j * TILE_SIZE + (float)k * TILE_SIZE / 5,
-                            (float)i * TILE_SIZE, (float)TILE_SIZE / 5,
-                            (float)TILE_SIZE / 5},
-                           {0, 0}, 0, WHITE);
-          }
-          // DrawText(TextFormat("%d", options_size),
-          //          j * TILE_SIZE + TILE_SIZE / 2, i * TILE_SIZE + TILE_SIZE /
-          //          2, 20, ORANGE);
+          // for (int k = 0; k < options_size; k++) {
+          //   DrawTexturePro(textures[options[k]],
+          //                  {0, 0, (float)textures[options[k]].width,
+          //                   (float)textures[options[k]].height},
+          //                  {(float)j * TILE_SIZE + (float)k * TILE_SIZE / 5,
+          //                   (float)i * TILE_SIZE, (float)TILE_SIZE / 5,
+          //                   (float)TILE_SIZE / 5},
+          //                  {0, 0}, 0, WHITE);
+          // }
+          DrawText(TextFormat("%d", options_size),
+                   j * TILE_SIZE + TILE_SIZE / 2, i * TILE_SIZE + TILE_SIZE / 2,
+                   20, ORANGE);
         }
       }
     }
@@ -240,17 +271,67 @@ public:
   static void HandleKeys() {
     if (IsKeyPressed(KEY_R)) {
       // Randomly collapse to a value
-      int i = GetRandomValue(0, CELL_COUNT - 1);
-      int j = GetRandomValue(0, CELL_COUNT - 1);
-      cout << "LOCATION COLLAPSED: " << i << " " << j << endl;
+      // int i = GetRandomValue(0, CELL_COUNT - 1);
+      // int j = GetRandomValue(0, CELL_COUNT - 1);
+      // cout << "LOCATION COLLAPSED: " << i << " " << j << endl;
+      // Grid[i][j]->RandomCollapse();
+      Reset();
+    }
+    if (IsKeyDown(KEY_SPACE)) {
+      Iteration();
+    }
+    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+      Vector2 mouse = GetMousePosition();
+      int i = mouse.y / TILE_SIZE;
+      int j = mouse.x / TILE_SIZE;
       Grid[i][j]->RandomCollapse();
     }
   }
+
+  static void Iteration() {
+    vector<Element *> elements;
+    // cout << "ITERATION" << endl;
+    for (int i = 0; i < HEIGHT / TILE_SIZE; i++) {
+      for (int j = 0; j < WIDTH / TILE_SIZE; j++) {
+        // cout << Grid[i][j]->get_collapsed() << " ";
+        // cout << i << " " << j << endl;
+        if (Grid[i][j]->get_collapsed() == -1)
+          elements.push_back(Grid[i][j]);
+      }
+    }
+    sort(elements.begin(), elements.end(), [](Element *a, Element *b) {
+      return a->getOptions().size() < b->getOptions().size();
+    });
+    vector<Element *> choices;
+    int mini_size = INT_MAX;
+    for (int i = 0; i < elements.size(); i++) {
+      // Find the minimum value that is not collapsed
+      if (elements[i]->getOptions().size() <= mini_size) {
+        // Add it to the list
+        choices.push_back(elements[i]);
+        mini_size = elements[i]->getOptions().size();
+        // cout << elements[i]->getOptions().size() << endl;
+      } else if (mini_size != INT_MAX)
+        break;
+    }
+    // Choose from these randomly to collapse
+    // cout << choices.size() << endl;
+    if (choices.size() == 0)
+      // Reset();
+      return;
+    int i = GetRandomValue(0, choices.size() - 1);
+    choices[i]->RandomCollapse();
+  }
 };
+
+void Element::ResetBoard() {
+  Helper::Reset();
+}
 
 int main(int argc, char *argv[]) {
   InitWindow(WIDTH, HEIGHT, "Tileset Generator");
   Setup();
+  // SetRandomSeed(98);
   for (int i = 0; i < CELL_COUNT; i++) {
     for (int j = 0; j < CELL_COUNT; j++) {
       Grid[i][j] = new Element();
@@ -260,16 +341,19 @@ int main(int argc, char *argv[]) {
   SetTargetFPS(FRAMES_PER_SECOND);
   while (!WindowShouldClose()) {
     BeginDrawing();
+    ClearBackground(BLACK);
     // Draw Each loaded texture
+    Helper::Draw();
+    Helper::HandleKeys();
+    Helper::Iteration();
     // for (int i = 0; i < textures.size(); i++) {
     //   DrawTexturePro(
     //       textures[i],
     //       {0, 0, (float)textures[i].width, (float)textures[i].height},
     //       {(float)i * TILE_SIZE, 0, TILE_SIZE, TILE_SIZE}, {0, 0}, 0, WHITE);
     // }
-    Helper::Draw();
-    Helper::HandleKeys();
-    ClearBackground(BLACK);
+
+    // Helper::Iteration();
     EndDrawing();
   }
   for (Texture2D t : textures) {
